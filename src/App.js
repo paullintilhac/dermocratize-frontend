@@ -1,14 +1,12 @@
 import './App.css';
 import ImageUploader from 'react-images-upload'
 import React, { useState } from "react"
-import Axios from 'axios'
-
+import { request, gql } from "graphql-request";
+import { useQuery } from "react-query";
 
 const UploadComponent = props => (
   <form>
     <label>
-      File Upload URL:
-      <input id='urlInput' type='text' onChange={props.onUrlChange} value={props.url}></input>
       <ImageUploader
         key='image-uploader'
         withIcon={true}
@@ -18,7 +16,7 @@ const UploadComponent = props => (
         buttonText='Choose an Image'
         onChange={props.onImage}
         imgExtension={['.jpg', '.png', '.jpeg']}
-        maxFileSize={5242880}
+        maxFileSize={52428800000}
       ></ImageUploader>
     </label>
   </form>
@@ -28,20 +26,10 @@ const App = () => {
 
   const [progress, setProgress ] = useState('getUpload')
   const [errorMessage, setErrorMessage ] = useState('')
-  const [url, setImageURL ] = useState('')
-
-  const onUrlChange = e => {
-    setImageURL(e.target.value)
-  }
+  const [textResponse, setTextResponse ] = useState('')
 
   const onImage = async (failedImages, successImages) => {
-    if (!url){
-      console.log("missing url")
-      setErrorMessage('missing url to point to')
-      setProgress('uploadError')
-      return
-    }
-
+    
     setProgress('uploading')
 
     try {
@@ -49,9 +37,27 @@ const App = () => {
       const parts = successImages[0].split(';')
       const mime = parts[0].split(':')[1]
       const name = parts[1].split('=')[1]
-      const data = parts[2]
-      const res = await Axios.post(url, {mime, name, image:data})
-      setImageURL(res.data.imageURL)
+      const data = parts[2].split(',')[1]
+      console.log("type of data: " + typeof(data))
+      console.log("top of data: " + JSON.stringify(data).substring(0,100))
+      console.log("data size: " + data.length)
+      const endpoint = "http://localhost:4001/graphql/";
+      const SCAN_MUTATION = gql`
+         mutation {
+            scanImage(data:"${data}") {
+                text
+            }
+         }
+      `;
+      
+      console.log("going in")
+      const response = await request(endpoint, SCAN_MUTATION)
+      .then((data) => console.error(data))
+      .catch((err) => console.error(err));
+      console.log("going out")
+
+      setTextResponse(JSON.stringify(response))
+
       setProgress('uploaded')
     } catch (error) {
       console.log("error in scan: " + error.message)
@@ -63,11 +69,11 @@ const App = () => {
   const content = () => {
     switch(progress){
       case 'getUpload':
-        return <UploadComponent onUrlChange={onUrlChange} onImage={onImage} url={url} />
+        return <UploadComponent onImage={onImage} />
       case 'uploading':
         return <h2>uploading...</h2>
       case 'uploaded':
-        return <img src={url} alt = "uploaded"></img>
+        return <div>Text response  {textResponse} </div>
       case 'uploadError':
         return (
           <>
